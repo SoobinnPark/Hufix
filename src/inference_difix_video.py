@@ -98,7 +98,7 @@ if __name__ == "__main__":
     #################################################################################################
     
     if args.json_path:
-        input_paths, ref_paths, gt_paths = load_from_json(json_path, split="test")
+        input_paths, ref_paths, gt_paths = load_data_from_json(json_path, split="test")
 
     else:
         # Load input images
@@ -118,7 +118,8 @@ if __name__ == "__main__":
 
             if os.path.isdir(args.ref_image):
                 ref_paths = sorted(glob(os.path.join(args.ref_image, "*ref.png")))
-                # ref_paths = sorted(glob(os.path.join(args.ref_image, "*frame0000*_gt.png")))
+                if ref_paths == []:
+                    ref= sorted(glob(os.path.join(args.ref_image, "*frame0000*_gt.png")))
                 # ref_paths = ref_paths[:4]
                 print(f"Found {len(ref_paths)} ref images:")
             else:
