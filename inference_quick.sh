@@ -11,23 +11,23 @@ conda activate difix
 ### (2) 라이브러리 경로 추가 (CUDA 등)
 export PATH=/home/urp25su_sbpark/anaconda3/bin:${PATH}
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 export TOKENIZERS_PARALLELISM=false
 
 # ID_FILE=""
 
-PATH_TO_INPUT=""
-PATH_TO_REF=""
+PATH_TO_INPUT="/local_data_2/dataset/mugsy_test_black_bg/FTD324_20240129"
+PATH_TO_REF="/local_data_2/dataset/mugsy_test_black_bg/FTD324_20240129_ref.png"
 
-OUT_ROOT=""
+OUT_ROOT="/local_data_2/urp25su_sbpark/Difix3D/outputs_multi/videos/FTD324_20240129"
 
-MODEL_PATH=""
+MODEL_PATH="/local_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
 
 python src/inference_difix_video.py \
-        --input_image "$ROOT/$ID" \
-        --ref_image "$ROOT/$ID" \
-        --output_dir "$OUT_ROOT/$ID" \
+        --input_image "$PATH_TO_INPUT" \
+        --ref_image "$PATH_TO_REF" \
+        --output_dir "$OUT_ROOT" \
         --model_path "$MODEL_PATH" \
         --prompt "remove degradation" \
         --timestep 199 \
