@@ -22,7 +22,7 @@ PATH_TO_REF="/local_data_2/dataset/mugsy_test_black_bg/FTD324_20240129_ref.png"
 
 OUT_ROOT="/local_data_2/urp25su_sbpark/Difix3D/outputs_multi/videos/FTD324_20240129"
 
-MODEL_PATH="/local_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
+MODEL_PATH="./models/model.pkl"
 
 python src/inference_difix_video.py \
         --input_image "$PATH_TO_INPUT" \
