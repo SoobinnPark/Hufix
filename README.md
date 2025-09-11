@@ -4,6 +4,12 @@
 
 ## Quick Start
 
+Simplest command:
+```
+./inference_quick.sh
+```
+You just change paths to the specific image and model checkpoint.
+
 command:
 ```bash
 CUDA_VISIBLE_DEVICES=0 python src/inference_difix_video.py \
