@@ -4,6 +4,14 @@
 
 ## Quick Start
 
+Inference difix by simple command:
+
+```
+CUDA_VISIBLE_DEVICES=1 python src/inference_human_difix.py --input_image "/local_data_2/dataset/mugsy_test_black_bg/NBP315_20240228" \
+--ref_image "/local_data_2/dataset/mugsy_test_black_bg/NBP315_20240228_ref.png" \
+--model_path "/local_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
+```
+
 Simplest command:
 ```
 ./inference_quick.sh
