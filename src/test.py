@@ -12,8 +12,8 @@ if __name__ == "__main__":
         mv_unet=True
         ).to(device)
     
-    input_tensor = torch.rand(4, 3, 800, 544)
-    ref_tensor = torch.rand(1, 3, 800, 544)
+    input_tensor = torch.rand(4, 3, 802, 550)
+    ref_tensor = torch.rand(1, 3, 802, 550)
     with torch.no_grad():
         outputs = inference_on_tensors(model, input_tensor, ref_tensor)
 
