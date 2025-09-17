@@ -45,7 +45,7 @@ def inference_on_tensors(
 
     if prompts is None:
         prompts = ["remove degradation"] * batch_size
-    
+        
     B, C, H, W = input_tensors.shape
 
     # inference 
@@ -55,7 +55,7 @@ def inference_on_tensors(
     for batch_entries in tqdm(batched(input_tensors, batch_size), total=len(input_tensors) // batch_size,  desc="Running inference"): # input_tensors batch
 
         input_batch = batch_entries.unsqueeze(1)
-        ref_batch = ref_tensors.unsqueeze(0).expand(B, -1, -1, -1, -1)
+        ref_batch = ref_tensors.unsqueeze(0).expand(batch_size, -1, -1, -1, -1)
 
         # print("ref_batch: ", ref_batch.shape)
         output_batch = model.sample_batch_multi_tensor(
@@ -63,7 +63,7 @@ def inference_on_tensors(
             height=height,
             width=width,
             ref_image=ref_batch,
-            prompt=prompts
+            prompt=prompts[:batch_size]
         )  # shape: [B, C, H, W] or list of PIL.Image
 
         outputs += output_batch
