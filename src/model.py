@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 import torch
+import torch.nn.functional as F
 import time
 from torchvision import transforms
 from transformers import AutoTokenizer, CLIPTextModel
@@ -14,6 +15,23 @@ p = "src/"
 sys.path.append(p)
 from einops import rearrange, repeat
 
+def preprocess_tensor_batched(img_tensor, target_size):
+    """
+    img_tensor: [B, V, C, H, W], 값 범위 [0,1] 또는 [0,255]
+    target_size: (H, W)
+    """
+    B, V, C, H, W = img_tensor.shape
+    img_tensor = img_tensor.view(B*V, C, H, W)
+    
+    # Resize
+    img_tensor = F.interpolate(img_tensor, size=target_size, mode='bicubic', align_corners=False)
+
+    # Normalize to [-1, 1]
+    if img_tensor.max() > 1.0:
+        img_tensor = img_tensor / 255.0
+    img_tensor = (img_tensor - 0.5) / 0.5
+    
+    return img_tensor.view(B, V, C, target_size[0], target_size[1])
 
 def make_1step_sched():
     noise_scheduler_1step = DDPMScheduler.from_pretrained("stabilityai/sd-turbo", subfolder="scheduler")
@@ -286,70 +304,30 @@ class Difix(torch.nn.Module):
         
         return output_pil
 
-    def sample_batch(self, image, width, height, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None):
-        # 단일 이미지 → 리스트로 변환
-        is_single = not isinstance(image, list)
-        if is_single:
-            image = [image]
-            ref_image = [ref_image] if ref_image else [None] #
-            prompt = [prompt] if prompt is not None else None
-            prompt_tokens = [prompt_tokens] if prompt_tokens is not None else None
-    
-        batch_size = len(image)
-        resized_inputs = []
-        input_sizes = []
-        
-        T = transforms.Compose([
-            transforms.Resize((height, width), interpolation=Image.LANCZOS),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
-        ])
-    
-        for i in range(batch_size):
-            img = image[i]
-            input_sizes.append(img.size)  # for later resizing
-    
-            new_w, new_h = img.width - img.width % 8, img.height - img.height % 8
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-            if ref_image:
-                ref = ref_image[i].resize((new_w, new_h), Image.LANCZOS)
-                img_tensor = torch.stack([T(img), T(ref)], dim=0)
-            else:
-                img_tensor = T(img).unsqueeze(0)  # 1 view
-    
-            resized_inputs.append(img_tensor)
-
-        x = torch.stack(resized_inputs, dim=0).cuda()  # shape: [B, V, C, H, W]
-        # print(x.shape)
-    
-        # 텍스트 처리
-        # if prompt is not None:
-        #     caption_tokens = self.tokenizer(prompt, max_length=self.tokenizer.model_max_length,
-        #                                     padding="max_length", truncation=True, return_tensors="pt").input_ids.cuda()
-        #     prompt_tokens = caption_tokens
-    
-        output_images = self.forward(x, timesteps, prompt, prompt_tokens)[:, 0]  # take first view output
-    
-        # 후처리 및 크기 복원
-        results = []
-        for i in range(batch_size):
-            out_img = transforms.ToPILImage()(output_images[i].cpu() * 0.5 + 0.5)
-            out_img = out_img.resize(input_sizes[i], Image.LANCZOS)
-            results.append(out_img)
-    
-        return results[0] if is_single else results
-    
     def sample_batch_multi(self, image, width, height, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None):
         is_single = not isinstance(image, list)
         if is_single:
             image = [image]
-            if ref_image:
-                if type(ref_image) == type([]) : ref_image = ref_image
-                else : ref_image = [ref_image]
-            else : ref_image = [None] 
 
             prompt = [prompt] if prompt is not None else None
             prompt_tokens = [prompt_tokens] if prompt_tokens is not None else None
+        
+        if ref_image is None:
+            ref_image = [[None] for _ in range(len(image))]
+        elif isinstance(ref_image, Image.Image):
+            ref_image = [[ref_image] for _ in range(len(image))]
+        elif isinstance(ref_image, list):
+            # case: list of PIL.Image
+            if all(isinstance(r, Image.Image) for r in ref_image):
+                ref_image = [ref_image for _ in range(len(image))]
+            # case: list of list of PIL.Image
+            elif all(isinstance(r, list) for r in ref_image):
+                if len(ref_image) != len(image):
+                    raise ValueError("Mismatch: len(ref_image) != batch size")
+            else:
+                raise TypeError("Unsupported ref_image content: must be Image or list of Image")
+        else:
+            raise TypeError(f"Unsupported ref_image type: {type(ref_image)}")
     
         batch_size = len(image)
         resized_inputs = []
@@ -370,18 +348,14 @@ class Difix(torch.nn.Module):
 
             input_list = [T(img)]
 
-            if ref_image:
-                
-                for ref_img in ref_image[i % len(ref_image)]:
-                    ref_t_i = ref_img.resize((new_w, new_h), Image.LANCZOS)
-                    ref_t_i = T(ref_img)
-                    input_list.append(ref_t_i) # stack every ref_image
+            for ref_img in ref_image[i]:
+                if ref_img is None:
+                    continue
+                ref_t_i = ref_img.resize((new_w, new_h), Image.LANCZOS)
+                ref_t_i = T(ref_t_i)
+                input_list.append(ref_t_i)
 
-                img_tensor = torch.stack(input_list, dim=0)
-           
-            else:
-                img_tensor = T(img).unsqueeze(0)  # 1 view  
-    
+            img_tensor = torch.stack(input_list, dim=0)
             resized_inputs.append(img_tensor)
     
         x = torch.stack(resized_inputs, dim=0).cuda()  # shape: [B, V, C, H, W]
@@ -396,6 +370,34 @@ class Difix(torch.nn.Module):
             results.append(out_img)
     
         return results[0] if is_single else results
+
+    def sample_batch_multi_tensor(self, image, width, height, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None):
+        """
+        image: torch.Tensor, shape [B, 1, C, H, W]
+        ref_images: torch.Tensor or None, shape [B, V, C, H, W] (optional)
+        """
+
+        B, _, C, H, W = image.shape
+        input_sizes = (H, W)
+
+        # Align size to multiple of 8
+        new_h, new_w = H - H % 8, W - W % 8
+        image = preprocess_tensor_batched(image, (new_h, new_w))  # [B, C, H, W]
+
+        if ref_image is not None:
+            # ref_image: [B, V, C, H, W]
+            B2, V, C2, H2, W2 = ref_image.shape
+            assert B2 == B or C2 == C, "Batch size or channels mismatch"
+            ref_image = preprocess_tensor_batched(ref_image, (new_h, new_w))
+            x = torch.cat([image, ref_image], dim=1)  # [B, V, C, H, W]
+
+        # print("x: ", x.shape)
+        x = x.cuda()
+        output_images = self.forward(x, timesteps, prompt, prompt_tokens)[:, 0]  # first view
+
+        # Resize back to original size
+        output_images = F.interpolate(output_images, size=input_sizes, mode='bicubic', align_corners=False)
+        return output_images  # [B, C, H, W], Tensor
 
     def save_model(self, outf, optimizer):
         sd = {}
