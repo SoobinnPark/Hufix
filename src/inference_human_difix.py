@@ -44,49 +44,31 @@ def inference_on_tensors(
     """
 
     if prompts is None:
-        prompts = ["remove degradation"] * input_tensors.shape[0]
-
-    # tensor → PIL transform
-    to_pil = transforms.ToPILImage()
-    input_images = [to_pil(img.cpu().clamp(0, 1)) for img in input_tensors]
-
-    if ref_tensors is not None:
-        ref_images = [to_pil(img.cpu().clamp(0, 1)) for img in ref_tensors]
-    else:
-        ref_images = None
-
+        prompts = ["remove degradation"] * batch_size
     
+    B, C, H, W = input_tensors.shape
+
     # inference 
     outputs = []
+    # print("ref_tensors: ", ref_tensors.shape)
 
-    for batch_entries in tqdm(batched(input_images, batch_size), total=len(input_images) // batch_size,  desc="Running inference"): # input_images batch
-        input_batch = []
-        ref_batch = []
-        prompt_batch = []
-    
-        for idx, input_image in enumerate(batch_entries):
-            input_batch.append(input_image)
-            prompt_batch.append(prompts[idx])
-                
-            if multi_view:
-                ref_batch = [ref_images for _ in range(len(input_batch))]
-            else:
-                ref_batch = [[ref_images[0]] for _ in range(len(input_batch))]
+    for batch_entries in tqdm(batched(input_tensors, batch_size), total=len(input_tensors) // batch_size,  desc="Running inference"): # input_tensors batch
 
-        output_batch = model.sample_batch_multi(
+        input_batch = batch_entries.unsqueeze(1)
+        ref_batch = ref_tensors.unsqueeze(0).expand(B, -1, -1, -1, -1)
+
+        # print("ref_batch: ", ref_batch.shape)
+        output_batch = model.sample_batch_multi_tensor(
             image=input_batch,
             height=height,
             width=width,
             ref_image=ref_batch,
-            prompt=prompt_batch
+            prompt=prompts
         )  # shape: [B, C, H, W] or list of PIL.Image
 
         outputs += output_batch
-    
-
-    to_tensor = transforms.ToTensor()
-    outputs = torch.stack([to_tensor(img) for img in outputs], dim=0)  # [B, C, H, W]
-
+        
+    outputs = torch.stack(outputs, dim=0)  # [B, C, H, W]
     return outputs
 
 
