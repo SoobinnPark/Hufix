@@ -21,6 +21,7 @@ def preprocess_tensor_batched(img_tensor, target_size):
     target_size: (H, W)
     """
     B, V, C, H, W = img_tensor.shape
+    print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
     img_tensor = img_tensor.view(B*V, C, H, W)
     
     # Resize
@@ -28,7 +29,7 @@ def preprocess_tensor_batched(img_tensor, target_size):
 
     # Normalize to [-1, 1]
     if img_tensor.max() > 1.0:
-        img_tensor = img_tensor / 255.0
+        img_tensor = img_tensor / img_tensor.max()
     img_tensor = (img_tensor - 0.5) / 0.5
     
     return img_tensor.view(B, V, C, target_size[0], target_size[1])
@@ -133,7 +134,7 @@ def save_ckpt(net_difix, optimizer, outf):
 
 
 class Difix(torch.nn.Module):
-    def __init__(self, pretrained_name=None, pretrained_path=None, ckpt_folder="checkpoints", lora_rank_vae=4, mv_unet=False, timestep=999, record_time=False): #
+    def __init__(self, pretrained_name=None, pretrained_path=None, ckpt_folder="checkpoints", lora_rank_vae=4, mv_unet=False, timestep=999, record_time=False, temp_attn=False): #
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained("stabilityai/sd-turbo", subfolder="tokenizer")
         self.text_encoder = CLIPTextModel.from_pretrained("stabilityai/sd-turbo", subfolder="text_encoder").cuda()
@@ -151,10 +152,16 @@ class Difix(torch.nn.Module):
         vae.decoder.ignore_skip = False
         
         if mv_unet:
-            from mv_unet import UNet2DConditionModel
-            # from mv_unet_cross_attention import UNet2DConditionModel
-            # from mv_unet_temp_attn import UNet2DConditionModel
-            print("mv_unet is used")
+            if temp_attn:
+                from mv_unet_temp_attn import UNet2DConditionModel
+                print("temporal attention")
+
+            else:
+                from mv_unet import UNet2DConditionModel
+                print("mv_unet is used")
+            
+            
+            
         else:
             from diffusers import UNet2DConditionModel
 
@@ -371,15 +378,19 @@ class Difix(torch.nn.Module):
     
         return results[0] if is_single else results
 
-    def sample_batch_multi_tensor(self, image, width, height, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None):
+    def sample_batch_multi_tensor(self, image, width=544, height=800, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None, batch_size=1):
         """
         image: torch.Tensor, shape [B, 1, C, H, W]
         ref_images: torch.Tensor or None, shape [B, V, C, H, W] (optional)
         """
 
         B, _, C, H, W = image.shape
-        input_sizes = (H, W)
+        
+        image = image.unsqueeze(1)
+        ref_image = ref_image.unsqueeze(0).expand(batch_size, -1, -1, -1, -1)
 
+        if prompt is None : prompt = ["remove degradation"] * batch_size
+        
         # Align size to multiple of 8
         new_h, new_w = H - H % 8, W - W % 8
         image = preprocess_tensor_batched(image, (new_h, new_w))  # [B, C, H, W]
@@ -390,14 +401,21 @@ class Difix(torch.nn.Module):
             assert B2 == B or C2 == C, "Batch size or channels mismatch"
             ref_image = preprocess_tensor_batched(ref_image, (new_h, new_w))
             x = torch.cat([image, ref_image], dim=1)  # [B, V, C, H, W]
-
-        # print("x: ", x.shape)
-        x = x.cuda()
+            x = x.cuda()
+        
+        else : x = image
+        
         output_images = self.forward(x, timesteps, prompt, prompt_tokens)[:, 0]  # first view
 
-        # Resize back to original size
-        output_images = F.interpolate(output_images, size=input_sizes, mode='bicubic', align_corners=False)
-        return output_images  # [B, C, H, W], Tensor
+        # Post-processing and resize to original size
+        results = []
+        for i in range(output_images.size(0)):
+            out_img = output_images[i].unsqueeze(0).cpu() * 0.5 + 0.5  # [1, C, H, W]
+            out_img = F.interpolate(out_img, size=(H, W), mode="bicubic", align_corners=False)
+            results.append(out_img.squeeze(0)) 
+        
+        results = torch.stack(results, dim=0)  # [B, C, H, W]
+        return results
 
     def save_model(self, outf, optimizer):
         sd = {}
