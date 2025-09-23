@@ -47,8 +47,6 @@ if __name__ == "__main__":
             ref_files = [ref_image]
         print(f"Found {len(ref_files)} reference images")
         ref_tensor = torch.stack([to_tensor(Image.open(f).convert("RGB")) for f in ref_files])
-    
-    print(input_tensor.shape, ref_tensor.shape)
 
     outputs = model.sample_batch_multi_tensor(
             image=input_tensor,
