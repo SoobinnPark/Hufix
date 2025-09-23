@@ -17,6 +17,21 @@ def batched(iterable, batch_size):
         end = min(len(iterable), i + batch_size)
         yield iterable[i:end]
 
+def load_data_from_json(json_path):
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    test_entries = []
+    gt_paths = []
+    for item_id, entry in data.get("test", {}).items():
+        input_path = entry["image"]
+        target_path = entry["target_image"]
+        ref_path = entry.get("ref_image", None)
+        prompt = entry.get("prompt", "remove degradation")
+        test_entries.append((item_id, input_path, target_path, ref_path, prompt))
+        gt_paths.append((item_id, target_path))
+    return test_entries, dict(gt_paths)
+
 def inference_on_tensors(
     model,
     input_tensors: torch.Tensor,   # [B, C, H, W], float in [0,1] or [-1,1]
@@ -45,7 +60,8 @@ def inference_on_tensors(
 
     if prompts is None:
         prompts = ["remove degradation"] * batch_size
-        
+    
+    print(prompts)
     B, C, H, W = input_tensors.shape
 
     # inference 
@@ -69,6 +85,7 @@ def inference_on_tensors(
         outputs += output_batch
         
     outputs = torch.stack(outputs, dim=0)  # [B, C, H, W]
+    
     return outputs
 
 
@@ -88,7 +105,7 @@ if __name__ == "__main__":
     to_tensor = transforms.ToTensor()  # [H,W,C] → [C,H,W] float [0,1]
 
     if args.json_path:
-        input_paths, ref_paths, gt_paths = load_from_json(args.json_path, split="test")
+        input_paths, ref_paths, gt_paths = load_data_from_json(args.json_path, split="test")
         input_tensors = [to_tensor(Image.open(p).convert("RGB")) for p in input_paths]
         ref_tensors   = [to_tensor(Image.open(p).convert("RGB")) for p in ref_paths] if ref_paths else []
         gt_tensors    = [to_tensor(Image.open(p).convert("RGB")) for p in gt_paths] if gt_paths else []
