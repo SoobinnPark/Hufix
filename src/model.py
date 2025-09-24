@@ -394,7 +394,7 @@ class Difix(torch.nn.Module):
         B, _, C, H, W = image.shape # [B, 1, C, H, W,]
         ref_image = ref_image.unsqueeze(0).expand(B, -1, -1, -1, -1) # [B, V, C, H, W]
         
-        if prompt is None : prompt = ["remove degradation"] * batch_size # duplicate prompts with batch size
+        if prompt is None : prompt = ["remove degradation"] * B
         
         # Align size to multiple of 8
         new_h, new_w = H - H % 8, W - W % 8
@@ -412,7 +412,9 @@ class Difix(torch.nn.Module):
 
         results = []
         for x_batched in tqdm(batched(x, batch_size), total=len(x) // batch_size,  desc="Running inference"): # input_images batch
-            output_images = self.forward(x_batched, timesteps, prompt, prompt_tokens)[:, 0]  # first view
+            B3, _, _, _, _ = x_batched.shape
+            prompts = prompt[:B3] 
+            output_images = self.forward(x_batched, timesteps, prompts, prompt_tokens)[:, 0]  # first view
         
             # Post-processing and resize to original size
             for i in range(output_images.size(0)):
