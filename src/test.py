@@ -2,7 +2,7 @@ from inference_human_difix import inference_on_tensors
 from model import Difix
 import torch
 
-import glob
+from glob import glob
 import os
 from torchvision import transforms 
 from PIL import Image
@@ -26,17 +26,20 @@ if __name__ == "__main__":
 
     to_tensor = transforms.ToTensor()
 
-    input_image="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/BCO039_20240326/BCO039_20240326_frame0000_rdr.png"
+    input_image="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/BCO039_20240326"
     ref_image="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/BCO039_20240326_ref.png"
 
+    # Load input images
     if os.path.isdir(input_image):
+        print("Searching in:", os.path.join(input_image, "*rdr.png"))
         input_files = sorted(glob(os.path.join(input_image, "*rdr.png")))
     else:
         input_files = [input_image]
-    
+
     print(f"Found {len(input_files)} input images")
-    print(input_files)
-    input_tensor = torch.stack([to_tensor(Image.open(f).convert("RGB")) for f in input_files])
+
+    input_tensor = [to_tensor(Image.open(f).convert("RGB")) for f in input_files][:10]
+    input_tensor = torch.stack(input_tensor)
     
     # Load reference images if provided
     ref_tensor = []
@@ -47,10 +50,15 @@ if __name__ == "__main__":
             ref_files = [ref_image]
         print(f"Found {len(ref_files)} reference images")
         ref_tensor = torch.stack([to_tensor(Image.open(f).convert("RGB")) for f in ref_files])
+    
+    print("input shape: ", input_tensor.shape, ref_tensor.shape)
 
+    # input: [B C H W], ref: [1(V), C, H, W]
     outputs = model.sample_batch_multi_tensor(
             image=input_tensor,
             ref_image=ref_tensor,
+            batch_size=4
         )
 
     print(f"Output shape: {outputs.shape}")
+    # save_image(outputs, "test.png")
