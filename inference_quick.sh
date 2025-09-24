@@ -11,49 +11,27 @@ conda activate difix
 ### (2) 라이브러리 경로 추가 (CUDA 등)
 export PATH=/home/urp25su_sbpark/anaconda3/bin:${PATH}
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
 export TOKENIZERS_PARALLELISM=false
 
 # ID_FILE=""
 
-PATH_TO_INPUT="/local_data_2/dataset/mugsy_test_black_bg/FTD324_20240129"
-PATH_TO_REF="/local_data_2/dataset/mugsy_test_black_bg/FTD324_20240129_ref.png"
+PATH_TO_INPUT="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/NBP315_20240228"
+PATH_TO_REF="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/NBP315_20240228_ref.png"
 
-OUT_ROOT="/local_data_2/urp25su_sbpark/Difix3D/outputs_multi/videos/FTD324_20240129"
+OUT_ROOT="/node_data_2/urp25su_sbpark/Difix3D/output"
 
-MODEL_PATH="./models/model.pkl"
+MODEL_PATH="/node_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
 
-python src/inference_difix_video.py \
+python src/inference_human_difix.py \
         --input_image "$PATH_TO_INPUT" \
         --ref_image "$PATH_TO_REF" \
         --output_dir "$OUT_ROOT" \
         --model_path "$MODEL_PATH" \
-        --prompt "remove degradation" \
         --timestep 199 \
-        --video \
-        --frame_rate 30 \
-        --batch_size 4 \
-        --record_time
-        
-
-# for multi-inference usage
-
-# while IFS= read -r ID; do
-#     echo "=== Running inference for ID: $ID ==="
-
-#     python src/inference_difix_video_copy.py \
-#         --input_image "$ROOT/$ID" \
-#         --ref_image "$ROOT/$ID" \
-#         --output_dir "$OUT_ROOT/$ID" \
-#         --model_path "$MODEL_PATH" \
-#         --prompt "remove degradation" \
-#         --timestep 199 \
-#         --video \
-#         --frame_rate 30 \
-#         --batch_size 4 \
-#         --record_time
-        
-
-#     echo ""
-# done < "$ID_FILE"
+        --batch_size 3 
