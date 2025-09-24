@@ -7,9 +7,9 @@
 Inference difix by simple command:
 
 ```
-CUDA_VISIBLE_DEVICES=1 python src/inference_human_difix.py --input_image "/local_data_2/dataset/mugsy_test_black_bg/NBP315_20240228" \
---ref_image "/local_data_2/dataset/mugsy_test_black_bg/NBP315_20240228_ref.png" \
---model_path "/local_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
+CUDA_VISIBLE_DEVICES=7 python src/inference_human_difix.py --input_image "/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/BCO039_20240326" \
+--ref_image "/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/BCO039_20240326_ref.png" \
+--model_path "/node_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
 ```
 
 Simplest command:
@@ -18,17 +18,44 @@ Simplest command:
 ```
 You just change paths to the specific image and model checkpoint.
 
-command:
-```bash
-CUDA_VISIBLE_DEVICES=0 python src/inference_difix_video.py \
-        --input_image "PATH/TO/INPUT_IMAGE" \
-        --ref_image "PATH/TO/REF_IMAGE" \
-        --output_dir "PATH/TO/OUTPUT" \
-        --model_path "checkpoints/model.pkl" \
-        --prompt "remove degradation" \
-        --timestep 199 
+In inference_quick.sh file,
+```
+PATH_TO_INPUT="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/NBP315_20240228"
+PATH_TO_REF="/node_data_2/urp25su_sbpark/2dgs_prior_rendered/dataset/mugsy_test_black_bg/NBP315_20240228_ref.png"
+
+OUT_ROOT="/node_data_2/urp25su_sbpark/Difix3D/outputs/"
+
+MODEL_PATH="/node_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior/model.pkl"
 ```
 
+## Using Hufix as a module
+
+You can use Hufix as a module:
+
+```
+from model import Difix
+
+model = Difix(
+        pretrained_path="/node_data_2/urp25su_sbpark/Difix3D/outputs/difix/train/checkpoints_sv_prior_bk_bg/model.pkl",
+        timestep=199,
+        mv_unet=True
+        )     
+model.set_eval()
+
+# You need to change these tensors to your images
+input_tensor = torch.rand(2, 3, 802, 550)
+ref_tensor = torch.rand(1, 3, 802, 550)
+
+
+# input: [B C H W], ref: [1(V), C, H, W]
+outputs = model.sample_batch_multi_tensor(
+        image=input_tensor,
+        ref_image=ref_tensor,
+        batch_size=4
+        )
+# output: [B C H W]
+
+```
 
 
 ## Data Preparation
