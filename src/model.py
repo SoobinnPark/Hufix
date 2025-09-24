@@ -380,39 +380,45 @@ class Difix(torch.nn.Module):
 
     def sample_batch_multi_tensor(self, image, width=544, height=800, ref_image=None, timesteps=None, prompt=None, prompt_tokens=None, batch_size=1):
         """
-        image: torch.Tensor, shape [B, 1, C, H, W]
-        ref_images: torch.Tensor or None, shape [B, V, C, H, W] (optional)
+        image: torch.Tensor, shape [B, C, H, W]
+        ref_images: torch.Tensor or None, shape [V, C, H, W] (optional)
         """
-
-        B, _, C, H, W = image.shape
         
-        image = image.unsqueeze(1)
-        ref_image = ref_image.unsqueeze(0).expand(batch_size, -1, -1, -1, -1)
+        def batched(iterable, batch_size):
+            """Yield batches from iterable."""
+            for i in range(0, len(iterable), batch_size):
+                end = min(len(iterable), i + batch_size)
+                yield iterable[i:end]
 
-        if prompt is None : prompt = ["remove degradation"] * batch_size
+        image = image.unsqueeze(1)
+        B, _, C, H, W = image.shape # [B, 1, C, H, W,]
+        ref_image = ref_image.unsqueeze(0).expand(B, -1, -1, -1, -1) # [B, V, C, H, W]
+        
+        if prompt is None : prompt = ["remove degradation"] * batch_size # duplicate prompts with batch size
         
         # Align size to multiple of 8
         new_h, new_w = H - H % 8, W - W % 8
-        image = preprocess_tensor_batched(image, (new_h, new_w))  # [B, C, H, W]
+        image = preprocess_tensor_batched(image, (new_h, new_w))  # [B, V, C, H, W]
 
         if ref_image is not None:
             # ref_image: [B, V, C, H, W]
             B2, V, C2, H2, W2 = ref_image.shape
             assert B2 == B or C2 == C, "Batch size or channels mismatch"
             ref_image = preprocess_tensor_batched(ref_image, (new_h, new_w))
-            x = torch.cat([image, ref_image], dim=1)  # [B, V, C, H, W]
+            x = torch.cat([image, ref_image], dim=1)  # [B, V', C, H, W]
             x = x.cuda()
         
         else : x = image
-        
-        output_images = self.forward(x, timesteps, prompt, prompt_tokens)[:, 0]  # first view
 
-        # Post-processing and resize to original size
         results = []
-        for i in range(output_images.size(0)):
-            out_img = output_images[i].unsqueeze(0).cpu() * 0.5 + 0.5  # [1, C, H, W]
-            out_img = F.interpolate(out_img, size=(H, W), mode="bicubic", align_corners=False)
-            results.append(out_img.squeeze(0)) 
+        for x_batched in tqdm(batched(x, batch_size), total=len(x) // batch_size,  desc="Running inference"): # input_images batch
+            output_images = self.forward(x_batched, timesteps, prompt, prompt_tokens)[:, 0]  # first view
+        
+            # Post-processing and resize to original size
+            for i in range(output_images.size(0)):
+                out_img = output_images[i].unsqueeze(0).cpu() * 0.5 + 0.5  # [1, C, H, W]
+                out_img = F.interpolate(out_img, size=(H, W), mode="bicubic", align_corners=False)
+                results.append(out_img.squeeze(0)) 
         
         results = torch.stack(results, dim=0)  # [B, C, H, W]
         return results
