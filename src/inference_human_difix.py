@@ -34,13 +34,15 @@ def load_data_from_json(json_path):
 
 def inference_on_tensors(
     model,
-    input_tensors: torch.Tensor,   # [B, C, H, W], float in [0,1] or [-1,1]
+    input_tensors: torch.Tensor,   # [B, C, H, W], float in [0,1]
     ref_tensors: torch.Tensor = None,  # [B, C, H, W] or None
     prompts: list = None,
     height: int = 800,
     width: int = 544,
     multi_view: bool = False,
-    batch_size: int = 4
+    batch_size: int = 4,
+    save: bool = False,
+    output_dir: str = ""
 ):
     """
     Run inference on given input tensors using Difix model.
@@ -58,34 +60,21 @@ def inference_on_tensors(
         outputs: list of PIL.Image or torch.Tensor [B, C, H, W]
     """
 
-    if prompts is None:
-        prompts = ["remove degradation"] * batch_size
+    # inference
+    outputs = model.sample_batch_multi_tensor(
+        image=input_tensors,
+        ref_image=ref_tensors,
+        batch_size=batch_size
+    )  # shape: [B, C, H, W] or list of PIL.Image
     
-    print(prompts)
-    B, C, H, W = input_tensors.shape
+    if save:
+        from torchvision.utils import save_image
+        for i, output_image in enumerate(outputs):
+            filename = f"output_{i}.png"
+            output_path = os.path.join(output_dir, filename)
+           
+            save_image(output_image, output_path)
 
-    # inference 
-    outputs = []
-    # print("ref_tensors: ", ref_tensors.shape)
-
-    for batch_entries in tqdm(batched(input_tensors, batch_size), total=len(input_tensors) // batch_size,  desc="Running inference"): # input_tensors batch
-
-        input_batch = batch_entries.unsqueeze(1)
-        ref_batch = ref_tensors.unsqueeze(0).expand(batch_size, -1, -1, -1, -1)
-
-        # print("ref_batch: ", ref_batch.shape)
-        output_batch = model.sample_batch_multi_tensor(
-            image=input_batch,
-            height=height,
-            width=width,
-            ref_image=ref_batch,
-            prompt=prompts[:batch_size]
-        )  # shape: [B, C, H, W] or list of PIL.Image
-
-        outputs += output_batch
-        
-    outputs = torch.stack(outputs, dim=0)  # [B, C, H, W]
-    
     return outputs
 
 
@@ -98,10 +87,12 @@ if __name__ == "__main__":
     parser.add_argument('--ref_image', type=str, default=None, help='Path to the reference image or directory')
     parser.add_argument("--height", type=int, default=800)
     parser.add_argument("--width", type=int, default=544)
-    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--batch_size", type=int, default=3)
     parser.add_argument('--timestep', type=int, default=199, help='Diffusion timestep')
+    parser.add_argument('--output_dir', type=str, default='output', help='Directory to save the output')
     args = parser.parse_args()
 
+    os.makedirs(args.output_dir, exist_ok=True)
     to_tensor = transforms.ToTensor()  # [H,W,C] → [C,H,W] float [0,1]
 
     if args.json_path:
@@ -152,16 +143,13 @@ if __name__ == "__main__":
     model.set_eval()
 
     # Enhance the input image
-    B = input_tensors.shape[0]
-    print(input_tensors.shape)
     outputs = inference_on_tensors(
         model=model,
-        input_tensors=input_tensors,
+        input_tensors=input_tensors[:10],
         ref_tensors=ref_tensors,
-        prompts=["remove degradation"] * B,
-        height=args.height,
-        width=args.width,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        output_dir=args.output_dir,
+        save=True
     )
 
     if isinstance(outputs, torch.Tensor):
