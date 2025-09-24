@@ -17,11 +17,11 @@ from einops import rearrange, repeat
 
 def preprocess_tensor_batched(img_tensor, target_size):
     """
-    img_tensor: [B, V, C, H, W], 값 범위 [0,1] 또는 [0,255]
+    img_tensor: [B, V, C, H, W], range [0,1]
     target_size: (H, W)
     """
     B, V, C, H, W = img_tensor.shape
-    # print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
+    print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
     img_tensor = img_tensor.view(B*V, C, H, W)
     
     # Resize
@@ -29,7 +29,8 @@ def preprocess_tensor_batched(img_tensor, target_size):
 
     # Normalize to [-1, 1]
     if img_tensor.max() > 1.0:
-        img_tensor = img_tensor / img_tensor.max()
+        img_tensor = torch.clamp(img_tensor, min=0, max=1)
+    
     img_tensor = (img_tensor - 0.5) / 0.5
     
     return img_tensor.view(B, V, C, target_size[0], target_size[1])
