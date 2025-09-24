@@ -56,6 +56,7 @@ outputs = model.sample_batch_multi_tensor(
 # output: [B, C, H, W]
 
 ```
+You can also check the src/test.py file for seeing example usage
 
 
 ## Data Preparation
