@@ -47,13 +47,13 @@ input_tensor = torch.rand(2, 3, 802, 550)
 ref_tensor = torch.rand(1, 3, 802, 550)
 
 
-# input: [B C H W], ref: [1(V), C, H, W]
+# input: [B, C, H, W], ref: [1(V), C, H, W]
 outputs = model.sample_batch_multi_tensor(
         image=input_tensor,
         ref_image=ref_tensor,
         batch_size=4
         )
-# output: [B C H W]
+# output: [B, C, H, W]
 
 ```
 
