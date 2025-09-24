@@ -21,7 +21,7 @@ def preprocess_tensor_batched(img_tensor, target_size):
     target_size: (H, W)
     """
     B, V, C, H, W = img_tensor.shape
-    print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
+    # print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
     img_tensor = img_tensor.view(B*V, C, H, W)
     
     # Resize
