@@ -59,6 +59,7 @@ if __name__ == "__main__":
             ref_image=ref_tensor,
             batch_size=4
         )
-
+    # output: [B C H W]
+    
     print(f"Output shape: {outputs.shape}")
     # save_image(outputs, "test.png")
