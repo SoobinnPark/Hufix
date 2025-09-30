@@ -21,7 +21,7 @@ def preprocess_tensor_batched(img_tensor, target_size):
     target_size: (H, W)
     """
     B, V, C, H, W = img_tensor.shape
-    print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
+    # print(f"preprocess: min={img_tensor.min()}, max={img_tensor.max()}, mean={img_tensor.mean()}")
     img_tensor = img_tensor.view(B*V, C, H, W)
     
     # Resize
@@ -396,9 +396,10 @@ class Difix(torch.nn.Module):
         ref_image = ref_image.unsqueeze(0).expand(B, -1, -1, -1, -1) # [B, V, C, H, W]
         
         if prompt is None : prompt = ["remove degradation"] * B
-        
+        else : prompt = [prompt] * B
         # Align size to multiple of 8
         new_h, new_w = H - H % 8, W - W % 8
+        # print(new_h, new_w)
         image = preprocess_tensor_batched(image, (new_h, new_w))  # [B, V, C, H, W]
 
         if ref_image is not None:
@@ -415,6 +416,7 @@ class Difix(torch.nn.Module):
         for x_batched in tqdm(batched(x, batch_size), total=len(x) // batch_size,  desc="Running inference"): # input_images batch
             B3, _, _, _, _ = x_batched.shape
             prompts = prompt[:B3] 
+
             output_images = self.forward(x_batched, timesteps, prompts, prompt_tokens)[:, 0]  # first view
         
             # Post-processing and resize to original size
